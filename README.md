@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/iF5BiZG7)
 
 # Instructions to build
@@ -6,3 +7,6 @@
 * Copy-Paste the opencv folder for your OS in vendor
 * Build with cmake
 * Ensure that all cmake dlls are next to the .exe
+=======
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/xNL7Hlyi)
+>>>>>>> b38dc43d4476511c0c445e3e6fb07166eff37db6
