@@ -1,0 +1,11 @@
+[submodule "vendor/imgui"]
+	path = vendor/imgui
+	url = https://github.com/ocornut/imgui
+	branch = master
+[submodule "vendor/glfw"]
+	path = vendor/glfw
+	url = https://github.com/glfw/glfw
+[submodule "vendor/imgui_file_dialog"]
+	path = vendor/imgui_file_dialog
+	url = https://github.com/aiekick/ImGuiFileDialog
+	branch = Lib_Only
