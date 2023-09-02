@@ -26,6 +26,9 @@ private:
 	void update_img();
 
 	cv::Mat detect_contours(const cv::Mat &img);
+	void perspective_transform();
+
+	void img_gl_call(const cv::Mat &img);
 
 private:
 	GLFWwindow *m_window;
@@ -34,17 +37,19 @@ private:
 	// This image should always be in BGR format
 	cv::Mat m_img;
 	cv::VideoCapture m_video;
-
+	std::vector<cv::Point> m_contours;
 	unsigned int m_texture_id = 2;
 
 	bool frozen = false;
 	bool camera_off = false;
+	bool previewing = false;
 
 
 	// Options
 	float m_canny_t1 = 45.0f;
 	float m_canny_t2 = 200.0f;
 	float m_epsilon = 0.1f;
+	int m_area_min = 1000;
 	bool m_convex_check = true;
 
 	// Computation task

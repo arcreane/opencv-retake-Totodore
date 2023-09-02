@@ -125,14 +125,25 @@ void Application::update()
 				"/");
 		}
 
-		float height = (float)m_video.get(cv::CAP_PROP_FRAME_HEIGHT);
-		float width = (float)m_video.get(cv::CAP_PROP_FRAME_WIDTH);
-		// Computing viewport in order to center image and keep aspect ratio
-		float img_aspect_ratio = width / height;
-		float viewport_aspect_ratio = io.DisplaySize.x / io.DisplaySize.y;
-		float scale = img_aspect_ratio > viewport_aspect_ratio ? io.DisplaySize.x / width : io.DisplaySize.y / height;
-		ImGui::Image((void *)(intptr_t)m_texture_id, ImVec2(width, height));
+		if (!previewing && ImGui::MenuItem("Transform", nullptr, true, !m_img.empty() && frozen))
+		{
+			perspective_transform();
+			previewing = true;
+		}
+		else if (previewing && ImGui::MenuItem("Show original", nullptr, true))
+		{
+			previewing = false;
+		}
 
+		{
+			float height = (float)m_video.get(cv::CAP_PROP_FRAME_HEIGHT);
+			float width = (float)m_video.get(cv::CAP_PROP_FRAME_WIDTH);
+			// Computing viewport in order to center image and keep aspect ratio
+			float img_aspect_ratio = width / height;
+			float viewport_aspect_ratio = io.DisplaySize.x / io.DisplaySize.y;
+			float scale = img_aspect_ratio > viewport_aspect_ratio ? io.DisplaySize.x / width : io.DisplaySize.y / height;
+			ImGui::Image((void *)(intptr_t)m_texture_id, ImVec2(width, height));
+		}
 		ImGui::End();
 	}
 
@@ -180,7 +191,15 @@ void Application::update()
 		ImGui::SliderFloat("Canny Treshold 1", &m_canny_t1, 0, 500);
 		ImGui::SliderFloat("Canny Treshold 2", &m_canny_t2, 0, 350);
 		ImGui::SliderFloat("Epsilon", &m_epsilon, 0.005f, 10.0f);
+		ImGui::SliderInt("Area min", &m_area_min, 0, 10000);
 		ImGui::Checkbox("Convex check", &m_convex_check);
+		if (ImGui::Button("Reset options")){
+			m_canny_t1 = 45.0f;
+			m_canny_t2 = 200.0f;
+			m_epsilon = 0.1f;
+			m_area_min = 1000;
+			m_convex_check = true;
+		}
 		ImGui::Text("FPS %f", ImGui::GetIO().Framerate);
 
 		ImGui::End();
@@ -214,35 +233,8 @@ void Application::update_img()
 		auto status = m_future.wait_for(std::chrono::milliseconds(0));
 		if (status == std::future_status::ready)
 		{
-			static cv::Mat img;
-			img = m_future.get();
-
-			// cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
-
-			glDeleteTextures(1, &m_texture_id);
-
-			glEnable(GL_TEXTURE_2D);
-			// glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-			glGenTextures(1, &m_texture_id);
-			glBindTexture(GL_TEXTURE_2D, m_texture_id);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-			// Set texture clamping method
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-
-			glTexImage2D(GL_TEXTURE_2D,	   // Type of texture
-						 0,				   // Pyramid level (for mip-mapping) - 0 is the top level
-						 GL_RGB,		   // Internal colour format to convert to
-						 img.cols,		   // Image width  i.e. 640 for Kinect in standard mode
-						 img.rows,		   // Image height i.e. 480 for Kinect in standard mode
-						 0,				   // Border width in pixels (can either be 1 or 0)
-						 GL_BGR_EXT,	   // Input image format (i.e. GL_RGB, GL_RGBA, GL_BGR etc.)
-						 GL_UNSIGNED_BYTE, // Image data type
-						 img.ptr());	   // The actual image data itself
+			m_img = m_future.get();
+			img_gl_call(m_img);
 			m_future = std::future<cv::Mat>();
 		}
 	}
@@ -264,7 +256,39 @@ void Application::update_img()
 
 			frozen = true;
 		}
+		else if (previewing) {
+			img_gl_call(m_img);
+		}
 	}
+}
+
+void Application::img_gl_call(const cv::Mat &img)
+{
+
+	glDeleteTextures(1, &m_texture_id);
+
+	glEnable(GL_TEXTURE_2D);
+	// glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glGenTextures(1, &m_texture_id);
+	glBindTexture(GL_TEXTURE_2D, m_texture_id);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	// Set texture clamping method
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+	glTexImage2D(GL_TEXTURE_2D,	   // Type of texture
+				 0,				   // Pyramid level (for mip-mapping) - 0 is the top level
+				 GL_RGB,		   // Internal colour format to convert to
+				 img.cols,		   // Image width  i.e. 640 for Kinect in standard mode
+				 img.rows,		   // Image height i.e. 480 for Kinect in standard mode
+				 0,				   // Border width in pixels (can either be 1 or 0)
+				 GL_BGR_EXT,	   // Input image format (i.e. GL_RGB, GL_RGBA, GL_BGR etc.)
+				 GL_UNSIGNED_BYTE, // Image data type
+				 img.ptr());	   // The actual image data itself
 }
 
 cv::Mat Application::detect_contours(const cv::Mat &img)
@@ -288,10 +312,12 @@ cv::Mat Application::detect_contours(const cv::Mat &img)
 		cv::approxPolyDP(contour, approx, cv::arcLength(contour, true) * (double)m_epsilon, true);
 
 		bool convex = cv::isContourConvex(approx);
-		if (approx.size() == 4 && (convex && m_convex_check))
+		double area = cv::contourArea(approx);
+		if (approx.size() == 4 && (convex && m_convex_check) && area > m_area_min && (m_contours.empty() || area > cv::contourArea(m_contours)))
 		{
 			// This is a four-sided contour, draw it on the image.
 			cv::polylines(output, approx, true, cv::Scalar(0, 255, 0), 2);
+			m_contours = approx;
 		}
 	}
 
@@ -299,7 +325,23 @@ cv::Mat Application::detect_contours(const cv::Mat &img)
 	std::cout << "Computation time: = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
 	return output;
 }
+void Application::perspective_transform()
+{
+	cv::Point2f src_vertices[4];
+	src_vertices[0] = m_contours[0];
+	src_vertices[1] = m_contours[1];
+	src_vertices[2] = m_contours[2];
+	src_vertices[3] = m_contours[3];
 
+	cv::Point2f dst_vertices[4];
+	dst_vertices[0] = cv::Point(0, 0);
+	dst_vertices[1] = cv::Point(m_img.cols, 0);
+	dst_vertices[2] = cv::Point(m_img.cols, m_img.rows);
+	dst_vertices[3] = cv::Point(0, m_img.rows);
+
+	cv::Mat warpMatrix = cv::getPerspectiveTransform(src_vertices, dst_vertices);
+	cv::warpPerspective(m_img, m_img, warpMatrix, m_img.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+}
 void Application::render()
 {
 	ImGui::Render();
