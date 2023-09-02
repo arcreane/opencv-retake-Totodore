@@ -7,10 +7,8 @@
 #include <memory>
 #include <vector>
 #include <opencv2/opencv.hpp>
-#include "modules/module.hpp"
-
-// Modules
-#include "modules/resize_module.hpp"
+#include <thread>
+#include <future>
 
 class Application
 {
@@ -27,6 +25,8 @@ private:
 
 	void update_img();
 
+	cv::Mat detect_contours(const cv::Mat &img);
+
 private:
 	GLFWwindow *m_window;
 	ImVec4 m_clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -37,13 +37,17 @@ private:
 
 	unsigned int m_texture_id = 2;
 
-	std::vector<cv::Mat> m_img_history{};
+	bool frozen = false;
+	bool camera_off = false;
 
-	// clang-format off
 
-    // List of modules with a callback to update the image
-    std::array<std::unique_ptr<Module>, 1> m_modules = {
-            std::make_unique<ResizeModule>(&m_img, [this] (cv::Mat &img) { this->update_img(); }),
-    };
-	// clang-format on
+	// Options
+	float m_canny_t1 = 45.0f;
+	float m_canny_t2 = 200.0f;
+	float m_epsilon = 0.1f;
+	bool m_convex_check = true;
+
+	// Computation task
+	std::future<cv::Mat> m_future;
+
 };

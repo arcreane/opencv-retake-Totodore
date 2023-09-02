@@ -102,11 +102,21 @@ void Application::update()
 				"Image files (.bmp *.dib *.jpeg *.jpg *.jpe *.jp2 *.png *.webp *.pbm *.pgm *.ppm *.pxm *.pnm *.sr *.ras *.tiff *.tif){.bmp,.dib,.jpeg,.jpg,.jpe,.jp2,.png,.webp,.pbm,.pgm,.ppm,.pxm,.pnm,.sr,.ras,.tiff,.tif}",
 				"/");
 		}
-		if (ImGui::MenuItem("Take a shot", nullptr, true))
+
+		if (!frozen && ImGui::MenuItem("Take a shot", nullptr, true))
 		{
-			// TODO: faire l'historique
+			m_video >> m_img;
+			cv::flip(m_img, m_img, 1);
+			camera_off = true;
 		}
-		if (ImGui::MenuItem("Save", "Ctrl+S", true, !m_img.empty()))
+		else if (frozen && ImGui::MenuItem("Show camera", nullptr, true))
+		{
+			m_img.release();
+			frozen = false;
+			camera_off = false;
+		}
+
+		if (ImGui::MenuItem("Save", "Ctrl+S", true, !m_img.empty() && frozen))
 		{
 			ImGuiFileDialog::Instance()->OpenDialog(
 				"ImgSavePicker",
@@ -134,15 +144,11 @@ void Application::update()
 			if (ImGuiFileDialog::Instance()->IsOk())
 			{
 				std::string path = ImGuiFileDialog::Instance()->GetFilePathName();
-				cv::Mat img = cv::imread(path);
-				if (img.empty())
-				{
+				m_img = cv::imread(path);
+				if (m_img.empty())
 					show_popup("Error", "Could not load image");
-				}
 				else
-				{
-					// update_img(img);
-				}
+					camera_off = true;
 				ImGuiFileDialog::Instance()->Close();
 			}
 			ImGuiFileDialog::Instance()->Close();
@@ -157,22 +163,28 @@ void Application::update()
 			if (ImGuiFileDialog::Instance()->IsOk())
 			{
 				std::string path = ImGuiFileDialog::Instance()->GetFilePathName();
-				cv::imwrite(path, m_img);
+				if (cv::imwrite(path, m_img))
+				{
+					m_img.release();
+					frozen = false;
+					camera_off = false;
+				}
 				ImGuiFileDialog::Instance()->Close();
 			}
 			ImGuiFileDialog::Instance()->Close();
 		}
 	}
 
-	if (!m_img.empty())
 	{
-		// Defining module windows
-		for (auto &module : m_modules)
-		{
-			module->update();
-		}
-	}
+		ImGui::Begin("Options");
+		ImGui::SliderFloat("Canny Treshold 1", &m_canny_t1, 0, 500);
+		ImGui::SliderFloat("Canny Treshold 2", &m_canny_t2, 0, 350);
+		ImGui::SliderFloat("Epsilon", &m_epsilon, 0.005f, 10.0f);
+		ImGui::Checkbox("Convex check", &m_convex_check);
+		ImGui::Text("FPS %f", ImGui::GetIO().Framerate);
 
+		ImGui::End();
+	}
 	update_img();
 }
 
@@ -196,35 +208,96 @@ void Application::show_popup(std::string title, std::string message)
 
 void Application::update_img()
 {
-	static cv::Mat img;
-	m_video >> img;
 
-	cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+	if (m_future.valid())
+	{
+		auto status = m_future.wait_for(std::chrono::milliseconds(0));
+		if (status == std::future_status::ready)
+		{
+			static cv::Mat img;
+			img = m_future.get();
 
-	glDeleteTextures(1, &m_texture_id);
+			// cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
 
-	glEnable(GL_TEXTURE_2D);
-	// glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-	glGenTextures(1, &m_texture_id);
-	glBindTexture(GL_TEXTURE_2D, m_texture_id);
+			glDeleteTextures(1, &m_texture_id);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glEnable(GL_TEXTURE_2D);
+			// glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+			glGenTextures(1, &m_texture_id);
+			glBindTexture(GL_TEXTURE_2D, m_texture_id);
 
-	// Set texture clamping method
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glTexImage2D(GL_TEXTURE_2D,	   // Type of texture
-				 0,				   // Pyramid level (for mip-mapping) - 0 is the top level
-				 GL_RGB,		   // Internal colour format to convert to
-				 img.cols,		   // Image width  i.e. 640 for Kinect in standard mode
-				 img.rows,		   // Image height i.e. 480 for Kinect in standard mode
-				 0,				   // Border width in pixels (can either be 1 or 0)
-				 GL_RGB,		   // Input image format (i.e. GL_RGB, GL_RGBA, GL_BGR etc.)
-				 GL_UNSIGNED_BYTE, // Image data type
-				 img.ptr());	   // The actual image data itself
+			// Set texture clamping method
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+
+			glTexImage2D(GL_TEXTURE_2D,	   // Type of texture
+						 0,				   // Pyramid level (for mip-mapping) - 0 is the top level
+						 GL_RGB,		   // Internal colour format to convert to
+						 img.cols,		   // Image width  i.e. 640 for Kinect in standard mode
+						 img.rows,		   // Image height i.e. 480 for Kinect in standard mode
+						 0,				   // Border width in pixels (can either be 1 or 0)
+						 GL_BGR_EXT,	   // Input image format (i.e. GL_RGB, GL_RGBA, GL_BGR etc.)
+						 GL_UNSIGNED_BYTE, // Image data type
+						 img.ptr());	   // The actual image data itself
+			m_future = std::future<cv::Mat>();
+		}
+	}
+	else
+	{
+
+		if (!frozen && !camera_off)
+		{
+			m_video >> m_img;
+			cv::flip(m_img, m_img, 1);
+
+			m_future = std::async(std::launch::async, [this]() mutable
+								  { return detect_contours(m_img); });
+		}
+		else if (!frozen)
+		{
+			m_future = std::async(std::launch::async, [this]() mutable
+								  { return detect_contours(m_img); });
+
+			frozen = true;
+		}
+	}
+}
+
+cv::Mat Application::detect_contours(const cv::Mat &img)
+{
+
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	cv::Mat output = img.clone();
+
+	cv::Mat img_gray;
+	cv::cvtColor(output, img_gray, cv::COLOR_BGR2GRAY);
+	cv::blur(img_gray, img_gray, cv::Size(3, 3));
+	cv::Mat canny_output;
+	cv::Canny(img_gray, canny_output, (double)m_canny_t1, (double)m_canny_t2);
+	std::vector<std::vector<cv::Point>> contours;
+	std::vector<cv::Vec4i> hierarchy;
+	cv::findContours(canny_output, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+
+	for (const std::vector<cv::Point> &contour : contours)
+	{
+		std::vector<cv::Point> approx;
+		cv::approxPolyDP(contour, approx, cv::arcLength(contour, true) * (double)m_epsilon, true);
+
+		bool convex = cv::isContourConvex(approx);
+		if (approx.size() == 4 && (convex && m_convex_check))
+		{
+			// This is a four-sided contour, draw it on the image.
+			cv::polylines(output, approx, true, cv::Scalar(0, 255, 0), 2);
+		}
+	}
+
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	std::cout << "Computation time: = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
+	return output;
 }
 
 void Application::render()
