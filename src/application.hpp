@@ -49,8 +49,8 @@ private:
 	float m_canny_t1 = 45.0f;
 	float m_canny_t2 = 200.0f;
 	float m_epsilon = 0.1f;
-	int m_area_min = 1000;
-	bool m_convex_check = true;
+	int m_area_min = 500;
+	bool m_closed_polygon = true;
 
 	// Computation task
 	std::future<cv::Mat> m_future;

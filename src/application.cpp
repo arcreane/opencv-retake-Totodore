@@ -192,13 +192,13 @@ void Application::update()
 		ImGui::SliderFloat("Canny Treshold 2", &m_canny_t2, 0, 350);
 		ImGui::SliderFloat("Epsilon", &m_epsilon, 0.005f, 10.0f);
 		ImGui::SliderInt("Area min", &m_area_min, 0, 10000);
-		ImGui::Checkbox("Convex check", &m_convex_check);
+		ImGui::Checkbox("Closed area", &m_closed_polygon);
 		if (ImGui::Button("Reset options")){
 			m_canny_t1 = 45.0f;
 			m_canny_t2 = 200.0f;
 			m_epsilon = 0.1f;
 			m_area_min = 1000;
-			m_convex_check = true;
+			m_closed_polygon = true;
 		}
 		ImGui::Text("FPS %f", ImGui::GetIO().Framerate);
 
@@ -306,14 +306,14 @@ cv::Mat Application::detect_contours(const cv::Mat &img)
 	std::vector<cv::Vec4i> hierarchy;
 	cv::findContours(canny_output, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
 
+	m_contours.clear();
 	for (const std::vector<cv::Point> &contour : contours)
 	{
 		std::vector<cv::Point> approx;
-		cv::approxPolyDP(contour, approx, cv::arcLength(contour, true) * (double)m_epsilon, true);
+		cv::approxPolyDP(contour, approx, cv::arcLength(contour, true) * (double)m_epsilon, m_closed_polygon);
 
-		bool convex = cv::isContourConvex(approx);
 		double area = cv::contourArea(approx);
-		if (approx.size() == 4 && (convex && m_convex_check) && area > m_area_min && (m_contours.empty() || area > cv::contourArea(m_contours)))
+		if (approx.size() == 4 &&  area > m_area_min && (m_contours.empty() || area > cv::contourArea(m_contours)))
 		{
 			// This is a four-sided contour, draw it on the image.
 			cv::polylines(output, approx, true, cv::Scalar(0, 255, 0), 2);
