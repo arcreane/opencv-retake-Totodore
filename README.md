@@ -8,3 +8,6 @@
 * Ensure that all cmake dlls are next to the .exe
 
 ## Video example
+
+https://github.com/arcreane/opencv-retake-Totodore/assets/26095587/3f658324-4a61-407d-a408-fc4985ea0a5a
+
