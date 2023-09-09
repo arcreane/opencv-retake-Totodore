@@ -3,8 +3,9 @@
 # Instructions to build
 
 * `git clone --recurse-submodules` to clone the repo and all its dependencies
-* Copy-Paste the opencv folder for your OS in vendor
-* Build with cmake (if there is an error because of a Debug or Release folder not found, create it in the build directory)
+* Copy-Paste the opencv folder for your OS in the vendor directory
+* Create a build/Debug and build/Release directory
+* Build with cmake
 * Ensure that all cmake dlls are next to the .exe
 
 ## Video example
